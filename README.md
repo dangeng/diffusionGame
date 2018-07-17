@@ -11,3 +11,13 @@ Diffusion: dp/dt = D d^2p/dx^2
 Score: integral Area dt
 
 Reaction: R + G -> _
+
+## To Run
+
+Do something like
+
+`python3 -i evolve.py`
+
+and then
+
+`>>> battle(0,1,True)`
