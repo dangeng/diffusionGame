@@ -8,9 +8,9 @@ DISPLAY_HEIGHT = 500
 DISPLAY_WIDTH = 500
 quota = 100
 
-edgeKernel = np.array([[1, 1, 1],
+edgeKernel = np.array([[0, 0, 0],
                        [-1, 0, 1],
-                       [-1, -1, -1]])
+                       [0, 0, 0]])
 
 diffKernel = np.array([[0, 1, 0],
                        [1, -4, 1],
@@ -67,7 +67,7 @@ def add_sources(densities, sources):
     sources[:,:,:2] = sources[:,:,:2] / sources[:,:,:2].sum(axis=(0,1))
 
     probs = sources.flatten() / float(sources.flatten().sum())
-    for i in range(5):
+    for i in range(10):
         idx = np.random.choice(sources.flatten().shape[0], p=probs)
         idx = np.unravel_index(idx, densities.shape)
         densities[idx] = 255
@@ -94,10 +94,11 @@ def create_image(densities):
 
     boundaries = np.stack((boundaries, boundaries, boundaries), axis=2)
     return np.maximum(densities, boundaries)
+    #return densities
 
 gen = lambda x: np.random.uniform(0,1,(100,100))
 
-def run(genSourceR, genSourceG, visuals=False):
+def run(genSourceR, genSourceG, frames=1000, visuals=False):
     pygame.init()
 
     if visuals:
@@ -117,7 +118,7 @@ def run(genSourceR, genSourceG, visuals=False):
 
     # ~13 seconds for no visuals, 1000 frames
     # ~30 seconds for visuals, 1000 frames
-    for _ in range(1000):
+    for _ in range(frames):
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 running = False

@@ -4,11 +4,13 @@ import torch.nn.functional as F
 
 import numpy as np
 import copy
-from multiprocessing import Process
+from scipy.ndimage import convolve
 
 from engine import run, gen
 
 from time import time
+
+import pickle
 
 class Net(nn.Module):
     def __init__(self):
@@ -26,11 +28,36 @@ class Net(nn.Module):
         return x
 
 def policy(densities, model):
+    densities = (densities - np.mean(densities, axis=(0,1))) / np.std(densities, axis=(0,1))
     densities = densities.T
     densities = np.expand_dims(densities, 0)
     densities = densities.copy() # Hack for from_numpy not supporting negative indexing
     densities = torch.from_numpy(densities).float()
     return model(densities).detach().numpy()[0,0,:,:]
+
+def edgePolicy(densities):
+    edgeKernel = np.array([[1, 1, 1],
+                       [-1, 0, 1],
+                       [-1, -1, -1]])
+
+    densities = densities[:,:,0]
+    densities = (densities.astype(int) > 0).astype(int)
+    probs = convolve(densities, edgeKernel)
+    return abs(probs)
+
+def edgePolicyCondensed(densities):
+    edgeKernel = np.array([[1, 1, 1],
+                       [-1, 0, 1],
+                       [-1, -1, -1]])
+
+    mask = np.zeros_like(densities)
+    mask[:,48:52,:] = 1
+    mask = mask[:,:,0]
+
+    densities = densities[:,:,0]
+    densities = (densities.astype(int) > 0).astype(int)
+    probs = convolve(densities, edgeKernel)
+    return abs(probs*mask)
 
 #scores = run(policy, policy, visuals=True)
 
@@ -43,17 +70,19 @@ while len(models) < 50:
     if policy(testArr, candidate_model).mean() > .01:
         models = np.append(models, candidate_model)
 
-def tournament(models):
+def tournament(models, frames=1000):
+    total_scores = 0
     num_wins = np.zeros_like(models)
     for i in range(100):
+        print(i)
         idx1, idx2 = np.random.choice(len(models), 2, replace=False)
-        scores = run(lambda x: policy(x, models[idx1]), lambda x: policy(x, models[idx2]))
-        print(scores)
+        scores = run(lambda x: policy(x, models[idx1]), lambda x: policy(x, models[idx2]), frames=frames)
         if scores[0] > scores[1]:
             num_wins[idx1] += 1
         else:
             num_wins[idx2] += 1
-        print(num_wins)
+        total_scores += scores.sum()
+    print(total_scores)
 
     argsort = np.argsort(num_wins)
     winners = models[argsort[int(.5*len(models)):]]
@@ -82,19 +111,27 @@ def mutate(model, rate=.03):
     return new_model
 
 num_wins = np.zeros_like(models)
-def battle(idx1, idx2):
-    scores = run(lambda x: policy(x, models[idx1]), lambda x: policy(x, models[idx2]))
+def battle(idx1, idx2, frames=1000, visuals=False):
+    scores = run(lambda x: policy(x, models[idx1]), lambda x: policy(x, models[idx2]), frames=frames, visuals=visuals)
     print(scores)
     if scores[0] > scores[1]:
         num_wins[idx1] += 1
     else:
         num_wins[idx2] += 1
 
-if False:
+with open('winners.pkl', 'rb') as f:
+    winners = pickle.load(f)
+models = breed(winners)
+
+raise Exception
+
+if True:
     for i in range(10):
-        winners = tournament(models)
+        winners = tournament(models, frames=10)
         prev_winners = copy.deepcopy(winners)
+
+        #with open('winners.pkl', 'wb') as f:
+            #pickle.dump(prev_winners, f)
+
         models = breed(winners)
 
-p1 = Process(target=lambda: battle(0,1))
-p2 = Process(target=lambda: battle(2,3))
